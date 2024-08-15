@@ -8,15 +8,14 @@
 * ------------------------------------------------------------
 */
 {
-    "sections": {
-      "main": {
-        "type": "page-generate",
-        "settings": {
-        }
+  "sections": {
+    "main": {
+      "type": "page-generate",
+      "settings": {
       }
-    },
-    "order": [
-      "main"
-    ]
-  }
-  
+    }
+  },
+  "order": [
+    "main"
+  ]
+}
