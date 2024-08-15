@@ -1,0 +1,207 @@
+{% schema %}
+{
+  "name": "t:sections.page-generate.name",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "header",
+      "content": "t:sections.all.padding.section_padding_heading"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "t:sections.all.padding.padding_top",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "t:sections.all.padding.padding_bottom",
+      "default": 36
+    }
+  ]
+}
+{% endschema %}
+
+{{ 'section-generate.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+{%- endstyle -%}
+
+<div class="page-width page-width--narrow section-{{ section.id }}-padding">
+  <h1
+    style="text-align:center"
+    class="main-page-title page-title h0{% if settings.animations_reveal_on_scroll %} scroll-trigger animate--fade-in{% endif %}"
+  >
+    {{ page.title | escape }}
+  </h1>
+
+  <div class="rte scroll-trigger animate--slide-in{% if settings.animations_reveal_on_scroll %} scroll-trigger animate--slide-in{% endif %}">
+    {{ page.content }}
+  </div>
+
+  <h2 class="scroll-trigger animate--slide-in">Customer ID: {{ customer.id }}</h2>
+  <h2 style="text-align:left" class="scroll-trigger animate--slide-in">Tokens Remaining: <span id="tokens"> </span></h2>
+
+  <div id="image-container" class="full-width-image scroll-trigger animate--slide-in">
+    <img id="product-image" src="{{ 'tshirt.jpg' | asset_url }}" alt="Custom Product Image">
+    <div id="spinner" class="spinner"></div>
+  </div>
+
+  <div class="progress">
+    <div class="color"></div>
+  </div>
+
+  <div class="button-container full-width-image scroll-trigger animate--slide-in">
+    <button id="generate-button" class="button">Gnerate</button>
+    <button id="like-button" class="button" disabled>Like</button>
+  </div>
+</div>
+
+{% if customer %}
+  <script>
+    window.customerInfo = {
+      id: '{{ customer.id }}',
+      email: '{{ customer.email }}',
+      firstName: '{{ customer.first_name }}',
+      lastName: '{{ customer.last_name }}',
+    };
+  </script>
+{% endif %}
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!window.customerInfo || !window.customerInfo.id) {
+      console.error('Customer information is not available.');
+      return;
+    }
+
+    const generateButton = document.getElementById('generate-button');
+    const productImage = document.getElementById('product-image');
+    const spinner = document.getElementById('spinner');
+    const tokensSpan = document.getElementById('tokens');
+    const likeButton = document.getElementById('like-button');
+
+    let currentImageId = null;
+
+    fetchTokens(); // Call this to set initial state of the regenerate button
+
+    async function fetchTokens() {
+      try {
+        console.log('Fetching tokens for customer ID:', window.customerInfo.id);
+        const response = await fetch('https://beetle-crisp-morally.ngrok-free.app/get_tokens', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ customer_id: window.customerInfo.id }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          tokensSpan.textContent = data.tokens;
+          console.log('Fetched tokens:', data.tokens);
+
+          if (data.tokens <= 0) {
+            generateButton.disabled = true;
+            generateButton.textContent = 'Generate';
+          } else {
+            generateButton.disabled = false;
+            generateButton.textContent = 'Generate';
+          }
+        } else {
+          console.error('Error fetching tokens', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching tokens:', error);
+      }
+    }
+
+    async function generateImage() {
+      try {
+        console.log('Generating image for customer ID:', window.customerInfo.id);
+
+        likeButton.disabled = true;
+        generateButton.disabled = true;
+        generateButton.textContent = 'Generating...';
+
+        productImage.classList.add('loading');
+        spinner.style.display = 'block';
+
+        const response = await fetch('https://beetle-crisp-morally.ngrok-free.app/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ customer_id: window.customerInfo.id }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          productImage.src = data.image_url;
+          currentImageId = data.image_id;
+          await fetchTokens();
+        } else {
+          console.error('Error generating image', response.statusText);
+          alert('Failed to generate image. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error generating image:', error);
+        alert('An error occurred while generating the image. Please try again.');
+      } finally {
+        likeButton.disabled = false;
+        productImage.classList.remove('loading');
+        spinner.style.display = 'none';
+      }
+    }
+
+    async function toggleLike() {
+      if (!currentImageId) return;
+
+      const isLiked = likeButton.textContent === 'Unlike';
+      try {
+        console.log('Toggling like for image ID:', currentImageId);
+        const response = await fetch('https://beetle-crisp-morally.ngrok-free.app/toggle_like', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ customer_id: window.customerInfo.id, image_id: currentImageId, liked: !isLiked }),
+        });
+
+        if (response.ok) {
+          likeButton.textContent = isLiked ? 'Like' : 'Unlike';
+        } else {
+          console.error('Error toggling like', response.statusText);
+          alert('Failed to update like status. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+        alert('An error occurred while updating the like status. Please try again.');
+      }
+    }
+
+    generateButton.addEventListener('click', generateImage);
+    likeButton.addEventListener('click', toggleLike);
+  });
+</script>
